@@ -1,0 +1,49 @@
+# Ignore node_modules directory
+node_modules/
+
+# Ignore log files
+*.log
+
+# Ignore temporary files
+*.tmp
+
+# Ignore macOS system files
+.DS_Store
+
+# Ignore Visual Studio Code settings
+.vscode/
+
+# Ignore environment variables file
+.env
+
+# Ignore build directories
+build/
+dist/
+
+# Ignore coverage reports
+coverage/
+*.cover
+*.coverage
+*.cov
+
+# Ignore IDE specific files
+.idea/
+*.iml
+.vs/
+
+# Ignore backup files
+*.bak
+*.swp
+*.swo
+
+# Ignore Visual Studio specific files
+*.user
+*.suo
+*.vcxproj.user
+*.csproj.user
+*.dbmdl
+*.jfm
+
+# Ignore Visual Studio solution and project files
+*.sln
+*.vcxproj
