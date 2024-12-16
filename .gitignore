@@ -47,3 +47,6 @@ coverage/
 # Ignore Visual Studio solution and project files
 *.sln
 *.vcxproj
+
+# Ignore executable files
+*.exe
