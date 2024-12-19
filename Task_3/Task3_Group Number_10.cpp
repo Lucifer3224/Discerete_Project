@@ -27,6 +27,8 @@ string affine_cipher(const string& message, int a, int b) {
     string not_valid_alphabet = "JjKkQqVvWwXxYyZz"; // Unsupported characters
 
     for (char c : message) {
+        /*  if (c == ' ')
+           cipheredMessage = cipheredMessage + "*";*/
 
         if (not_valid_alphabet.find(c) != string::npos) { // Check if the character is invalid
             cout << "Invalid character in message: " << c << endl;
