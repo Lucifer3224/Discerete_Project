@@ -1,392 +1,539 @@
+/**
+ * @file main.cpp
+ * @brief logical expression analyzer that generates truth tables and analyzes logical validity and satisfiability.
+ * 
+ * Checking for valid and satisfiable logical expressions at line 415 :D
+ * 
+ */
+
 #include <iostream>
 #include <vector>
 #include <string>
-#include <sstream>
 #include <map>
-#include <algorithm>
-#include <cmath>
-#include <iomanip>
 #include <stack>
+#include <memory>
+#include <bitset>
+#include <unordered_set>
+#include <algorithm>
+#include <iomanip>
 
-// ANSI Color Codes for Terminal Output
-const std::string RESET = "\033[0m";
-const std::string RED = "\033[31m";
-const std::string GREEN = "\033[32m";
-const std::string YELLOW = "\033[33m";
-const std::string BLUE = "\033[34m";
-const std::string MAGENTA = "\033[35m";
-const std::string BOLD = "\033[1m";
-const std::string CYAN = "\033[36m";
+// Constants for terminal colors
+namespace Colors {
+    const std::string RESET = "\033[0m";
+    const std::string RED = "\033[31m";
+    const std::string GREEN = "\033[32m";
+    const std::string YELLOW = "\033[33m";
+    const std::string BLUE = "\033[34m";
+    const std::string MAGENTA = "\033[35m";
+    const std::string BOLD = "\033[1m";
+}
 
-// Logical Operations Class
-class LogicalOperations {
+/**
+ * @class ExpressionTokenizer
+ * @brief Handles the tokenization of logical expressions into their component parts
+ */
+class ExpressionTokenizer {
 public:
-    // Logical NOT operation
-    static bool logicalNot(bool x) {
-        return !x;
-    }
+    /**
+     * @brief Token types for logical expressions
+     */
+    enum class TokenType {
+        VARIABLE,
+        OPERATOR,
+        PARENTHESIS,
+        INVALID
+    };
 
-    // Logical AND operation
-    static bool logicalAnd(bool x, bool y) {
-        return x && y;
-    }
+    /**
+     * @brief Structure to represent a token in the expression
+     */
+    struct Token {
+        TokenType type;
+        char value;
+        int precedence; // Operator precedence, -1 for non-operators
+    };
 
-    // Logical OR operation
-    static bool logicalOr(bool x, bool y) {
-        return x || y;
-    }
+private:
+    // Operator precedence map for tokenization
+    const std::map<char, int> operatorPrecedence = {
+        {'~', 4},  // NOT
+        {'&', 3},  // AND
+        {'|', 2},  // OR
+        {'-', 1},  // IMPLIES
+        {'<', 0}   // BICONDITIONAL
+    };
 
-    // Logical Conditional operation
-    static bool logicalImplies(bool x, bool y) {
-        return !x || y;
-    }
+public:
+    /**
+     * @brief Tokenizes an input expression into a vector of tokens
+     * @param expression The logical expression to tokenize
+     * @return Vector of tokens
+     */
+    std::vector<Token> tokenize(const std::string& expression) {
+        std::vector<Token> tokens;
+        
+        for (size_t i = 0; i < expression.length(); ++i) {
+            char c = expression[i];
+            
+            // Skip whitespace
+            if (std::isspace(c)) continue;
 
-    // Logical BICONDITIONAL operation
-    static bool logicalBiconditional(bool x, bool y) {
-        return x == y;
+            // Handle special operators 
+            if (c == '-' && i + 1 < expression.length() && expression[i + 1] == '>') {
+                // This line adds a new Token to the 'tokens' vector. The Token is created using an initializer list
+                // with three elements: the type of the token (TokenType::OPERATOR), the character representing the 
+                // operator ('-'), and the precedence of the operator (retrieved from the 'operatorPrecedence' map).
+                tokens.push_back({TokenType::OPERATOR, '-', operatorPrecedence.at('-')}); // Implication '->'
+                ++i;
+                continue;
+            }
+            if (c == '<' && i + 2 < expression.length() && expression[i + 1] == '-' && expression[i + 2] == '>') {
+                // This line adds a new Token to the 'tokens' vector. The Token is created using an initializer list
+                // with three elements: the type of the token (TokenType::OPERATOR), the character representing the
+                // operator ('<'), and the precedence of the operator (retrieved from the 'operatorPrecedence' map).
+                tokens.push_back({TokenType::OPERATOR, '<', operatorPrecedence.at('<')}); // Biconditional '<->'
+                i += 2;
+                continue;
+            }
+
+            // Categorize token
+            Token token;
+            if (std::isalpha(c)) {
+                token = {TokenType::VARIABLE, c, -1};
+            } else if (c == '(' || c == ')') {
+                token = {TokenType::PARENTHESIS, c, -1};
+            } else if (operatorPrecedence.count(c)) {
+                token = {TokenType::OPERATOR, c, operatorPrecedence.at(c)};
+            } else {
+                token = {TokenType::INVALID, c, -1};
+            }
+
+            tokens.push_back(token);
+        }
+
+        return tokens;
     }
 };
 
-// Expression Parsing and Evaluation Class
-class LogicalExpressionEvaluator {
+/**
+ * @class LogicalEvaluator
+ * @brief Handles the evaluation of logical expressions using tokens
+ */
+class LogicalEvaluator {
 private:
-    std::map<char, bool> variableValues;
+    std::map<char, bool> variableValues; // Map to store variable values
+    ExpressionTokenizer tokenizer; // Tokenizer to break down expressions
 
-    // Check if character is an operator
-    bool isOperator(char c) {
-        return c == '&' || c == '|' || c == '~' || c == '-' || c == '<';
-    }
-
-    // Precedence of operators
-    int getPrecedence(char op) {
-        if (op == '~') return 4;  // Highest precedence for NOT
-        if (op == '&') return 3;  // AND has higher precedence than OR
-        if (op == '|') return 2;
-        if (op == '-') return 1;  // Conditional
-        if (op == '<') return 0;  // BICONDITIONAL
-        return -1;
-    }
-
-    // Evaluate single operation
-    bool applyOperator(char op, bool b1, bool b2 = false) {
-        switch(op) {
-            case '~': return LogicalOperations::logicalNot(b1);
-            case '&': return LogicalOperations::logicalAnd(b1, b2);
-            case '|': return LogicalOperations::logicalOr(b1, b2);
-            case '-': return LogicalOperations::logicalImplies(b1, b2);
-            case '<': return LogicalOperations::logicalBiconditional(b1, b2);
-            default: return b1;
+    /**
+     * @brief Evaluates a single logical operation
+     * @param op The operator character
+     * @param a The first operand
+     * @param b The second operand (optional for unary operators)
+     * @return The result of the logical operation
+     */
+    bool evaluateOperation(char op, bool a, bool b = false) {
+        switch (op) {
+            case '~': return !a;       // NOT operation
+            case '&': return a && b;   // AND operation
+            case '|': return a || b;   // OR operation
+            case '-': return !a || b;  // Implication (a -> b)
+            case '<': return a == b;   // Biconditional (a <-> b)
+            default: return false;     // Invalid operator
         }
     }
 
 public:
-    // Reset variable values
-    void resetVariables() {
-        variableValues.clear();
-    }
-
-    // Set variable values for evaluation
+    /**
+     * @brief Sets the value of a variable
+     * @param var The variable character
+     * @param value The boolean value to set
+     */
     void setVariable(char var, bool value) {
         variableValues[var] = value;
     }
 
-    // Evaluate a logical expression
+    /**
+     * @brief Evaluates a logical expression using infix notation and operator precedence.
+     * 
+     * This function tokenizes the input logical expression and evaluates it using a stack-based
+     * approach to handle operator precedence and parentheses. It supports variables, logical
+     * operators (NOT, AND, OR, IMPLIES, BICONDITIONAL), and parentheses for grouping.
+     * 
+     * The evaluation process involves:
+     * - Tokenizing the expression into variables, operators, and parentheses.
+     * - Using a value stack to store boolean values of variables.
+     * - Using an operator stack to manage operators and parentheses.
+     * - Processing operators based on their precedence and evaluating sub-expressions.
+     * - Handling parentheses by processing until matching '(' is found.
+     * - Returning the final result of the logical expression.
+     * - Throwing a runtime error for invalid tokens or malformed expressions.
+     * 
+     * @param expression The logical expression to evaluate.
+     * @return The boolean result of the evaluation.
+     * @throws std::runtime_error If an invalid token is encountered or the expression is malformed.
+     */
     bool evaluate(const std::string& expression) {
-        std::stack<bool> values;
-        std::stack<char> ops;
+        // Tokenize the expression into a vector of tokens
+        auto tokens = tokenizer.tokenize(expression);
         
-        for (size_t i = 0; i < expression.length(); i++) {
-            // Skip whitespace
-            if (expression[i] == ' ') continue;
+        // Stack to store operand values (true/false)
+        std::stack<bool> valueStack;
+        
+        // Stack to store operators and parentheses
+        std::stack<ExpressionTokenizer::Token> operatorStack;
 
-            // Handle opening parenthesis
-            if (expression[i] == '(') {
-                ops.push(expression[i]);
-                continue;
-            }
+        /**
+         * @brief Iterate through each token in the tokenized expression.
+         * - If the token is a variable, push its value onto the value stack.
+         * - If the token is an operator, process operators with higher or equal precedence
+         *   from the operator stack and then push the current operator onto the stack.
+         * - If the token is a parenthesis, handle '(' by pushing it onto the operator stack,
+         *   and handle ')' by processing until the matching '(' is found and then removing it.
+         * - If an invalid token is encountered, throw a runtime error.
+         */
+        for (const auto& token : tokens) {
+            switch (token.type) {
+            case ExpressionTokenizer::TokenType::VARIABLE:
+                // Push the value of the variable onto the value stack
+                valueStack.push(variableValues[token.value]);
+                break;
 
-            // Handle closing parenthesis
-            if (expression[i] == ')') {
-                while (!ops.empty() && ops.top() != '(') {
-                    char op = ops.top();
-                    ops.pop();
-
-                    // Unary NOT
-                    if (op == '~') {
-                        bool val = values.top();
-                        values.top() = applyOperator(op, val);
-                    }
-                    // Binary operators
-                    else {
-                        bool val2 = values.top();
-                        values.pop();
-                        bool val1 = values.top();
-                        values.pop();
-                        values.push(applyOperator(op, val1, val2));
-                    }
+            case ExpressionTokenizer::TokenType::OPERATOR:
+                // Process operators with higher or equal precedence
+                while (!operatorStack.empty() && 
+                   operatorStack.top().type == ExpressionTokenizer::TokenType::OPERATOR &&
+                   operatorStack.top().precedence >= token.precedence) {
+                // Evaluate the top operator in the stack
+                processTopOperator(valueStack, operatorStack);
                 }
-                ops.pop(); // Remove the opening parenthesis
-                continue;
-            }
+                // Push the current operator onto the operator stack
+                operatorStack.push(token);
+                break;
 
-            // Handle negation (unary operator)
-            if (expression[i] == '~') {
-                ops.push(expression[i]);
-                continue;
-            }
-
-            // If it's a variable
-            if (std::isalpha(expression[i])) {
-                bool value = variableValues[expression[i]];
-                values.push(value);
-
-                // Apply any pending negation
-                while (!ops.empty() && ops.top() == '~') {
-                    value = applyOperator('~', value);
-                    values.top() = value;
-                    ops.pop();
-                }
-            }
-            // If it's an operator
-            else if (isOperator(expression[i])) {
-                // Handle Conditional and biconditional
-                if (expression[i] == '-' && i + 1 < expression.length() && expression[i + 1] == '>') {
-                    ops.push('-');
-                    i++;
-                } else if (expression[i] == '<' && i + 2 < expression.length() && expression[i + 1] == '-' && expression[i + 2] == '>') {
-                    ops.push('<');
-                    i += 2;
+            case ExpressionTokenizer::TokenType::PARENTHESIS:
+                if (token.value == '(') {
+                // Push '(' onto the operator stack
+                operatorStack.push(token);
                 } else {
-                    // Process operators of higher or equal precedence
-                    while (!ops.empty() && getPrecedence(ops.top()) >= getPrecedence(expression[i])) {
-                        char op = ops.top();
-                        ops.pop();
-
-                        // Unary NOT
-                        if (op == '~') {
-                            bool val = values.top();
-                            values.top() = applyOperator(op, val);
-                        }
-                        // Binary operators
-                        else {
-                            bool val2 = values.top();
-                            values.pop();
-                            bool val1 = values.top();
-                            values.pop();
-                            values.push(applyOperator(op, val1, val2));
-                        }
-                    }
-                    ops.push(expression[i]);
+                // Process until matching '(' is found
+                while (!operatorStack.empty() && operatorStack.top().value != '(') {
+                    // Evaluate the top operator in the stack
+                    processTopOperator(valueStack, operatorStack);
                 }
+                if (!operatorStack.empty()) {
+                    // Remove '(' from the stack
+                    operatorStack.pop();
+                }
+                }
+                break;
+
+            default:
+                // Throw an error if an invalid token is encountered
+                throw std::runtime_error("Invalid token encountered");
             }
         }
 
-        // Process remaining operators
-        while (!ops.empty()) {
-            char op = ops.top();
-            ops.pop();
-
-            // Unary NOT
-            if (op == '~') {
-                bool val = values.top();
-                values.top() = applyOperator(op, val);
-            }
-            // Binary operators
-            else {
-                bool val2 = values.top();
-                values.pop();
-                bool val1 = values.top();
-                values.pop();
-                values.push(applyOperator(op, val1, val2));
-            }
+        // Process any remaining operators in the stack
+        while (!operatorStack.empty()) {
+            // Evaluate the top operator in the stack
+            processTopOperator(valueStack, operatorStack);
         }
 
-        return values.top();
+        // Return the final result from the value stack
+        return valueStack.empty() ? false : valueStack.top();
     }
 
-    // Extract unique variables from expressions
-    std::vector<char> extractVariables(const std::vector<std::string>& expressions) {
-        std::vector<char> variables;
-        for (const auto& expr : expressions) {
-            for (char c : expr) {
-                if (std::isalpha(c) && 
-                    std::find(variables.begin(), variables.end(), c) == variables.end()) {
-                    variables.push_back(c);
-                }
-            }
-        }
-        std::sort(variables.begin(), variables.end());
-        return variables;
-    }
-};
-
-// Truth Table Generator and Analyzer
-class LogicalAnalyzer {
 private:
-    LogicalExpressionEvaluator evaluator;
+    /**
+     * @brief Processes the top operator from the operator stack and applies it to the values in the value stack.
+     *
+     * This function pops the top operator from the operator stack and applies it to the values in the value stack.
+     * If the operator is a unary operator (e.g., '~' for NOT), it pops one value from the value stack, applies the
+     * operator, and pushes the result back onto the value stack.
+     * If the operator is a binary operator (e.g., '&' for AND, '|' for OR), it pops two values from the value stack,
+     * applies the operator, and pushes the result back onto the value stack.
+     *
+     * @param valueStack A stack of boolean values representing the operands.
+     * @param operatorStack A stack of tokens representing the operators.
+     */
+    void processTopOperator(std::stack<bool>& valueStack,
+                           std::stack<ExpressionTokenizer::Token>& operatorStack) {
+        auto op = operatorStack.top();
+        operatorStack.pop();
 
-    // Print table header
-    void printHeader(const std::vector<char>& variables, 
-                     const std::vector<std::string>& premises, 
-                     const std::string& conclusion) {
+        if (op.value == '~') {
+            if (valueStack.empty()) throw std::runtime_error("Invalid expression");
+            bool val = valueStack.top();
+            valueStack.pop();
+            valueStack.push(evaluateOperation(op.value, val)); // Evaluate NOT operation
+        } else {
+            if (valueStack.size() < 2) throw std::runtime_error("Invalid expression");
+            bool val2 = valueStack.top();
+            valueStack.pop();
+            bool val1 = valueStack.top();
+            valueStack.pop();
+            valueStack.push(evaluateOperation(op.value, val1, val2)); // Evaluate binary operation
+        }
+    }
+};;
+
+/**
+ * @class TruthTableGenerator
+ * @brief Generates and analyzes truth tables for logical expressions.
+ * 
+ * This class is responsible for generating truth tables for given logical expressions (premises and conclusion)
+ * and analyzing their validity and satisfiability. It uses the LogicalEvaluator class to evaluate the expressions
+ * for all possible combinations of variable values.
+ */
+class TruthTableGenerator {
+private:
+    LogicalEvaluator evaluator; // Object to evaluate logical expressions
+    std::vector<char> variables; // List of unique variables in the expressions
+    std::vector<std::string> premises; // List of premises (logical expressions)
+    std::string conclusion; // Conclusion (logical expression)
+
+    /**
+     * @brief Extracts unique variables from expressions.
+     * 
+     * This function scans through the premises and conclusion to find all unique variables.
+     * It stores these variables in a sorted vector for consistent processing.
+     */
+    void extractVariables() {
+        std::unordered_set<char> variableSet; // Temporary set to store unique variables
+        
+        // Process premises to extract variables
+        for (const auto& premise : premises) {
+            for (char c : premise) {
+                if (std::isalpha(c)) { // Check if the character is a letter
+                    variableSet.insert(c); // Insert the variable into the set
+                }
+            }
+        }
+        
+        // Process conclusion to extract variables
+        for (char c : conclusion) {
+            if (std::isalpha(c)) { // Check if the character is a letter
+                variableSet.insert(c); // Insert the variable into the set
+            }
+        }
+
+        // Convert the set to a sorted vector
+        variables = std::vector<char>(variableSet.begin(), variableSet.end()); // Copy set to vector for sorting and indexing purposes
+        std::sort(variables.begin(), variables.end()); // Sort the variables for consistent order and indexing
+    }
+
+    /**
+     * @brief Prints the truth table header.
+     * 
+     * This function prints the header of the truth table, including the variable names,
+     * premises, and conclusion. It formats the header for readability.
+     * 
+     */
+    void printHeader() const {
         // Print variable columns
         for (char var : variables) {
-            std::cout << BOLD << std::setw(6) << var << " " << RESET;
+            std::cout << Colors::BOLD << std::setw(6) << var << " " << Colors::RESET;
         }
 
-        // Print premises columns
+        // Print premises and conclusion
         for (size_t i = 0; i < premises.size(); ++i) {
-            std::cout << BOLD << std::setw(12) << "Premise" + std::to_string(i+1) << " " << RESET;
+            std::cout << Colors::BOLD << std::setw(12) 
+                     << "P" + std::to_string(i+1) << " " << Colors::RESET;
         }
+        std::cout << Colors::BOLD << std::setw(12) << "Conclusion" << Colors::RESET << "\n";
 
-        // Print conclusion column
-        std::cout << BOLD << std::setw(12) << "Conclusion" << RESET << std::endl;
-
-        // Print separator
-        for (size_t i = 0; i < variables.size() + premises.size() + 1; ++i) {
-            std::cout << std::string(15, '-');
-        }
-        std::cout << std::endl;
+        // Print separator line
+        // Separator line size calculation based on columns and widths of variables, premises, and conclusion
+        std::cout << std::string(12 * (variables.size() + premises.size() + 1), '-') << "\n";
     }
 
 public:
-    // Generate and analyze truth table
-    void generateTruthTable(const std::vector<std::string>& premises, 
-                             const std::string& conclusion) {
-        // Extract variables
-        std::vector<char> variables = evaluator.extractVariables(premises);
-        
-        // Add variables from conclusion if not already present
-        std::vector<char> conclusionVars = evaluator.extractVariables({conclusion});
-        for (char var : conclusionVars) {
-            if (std::find(variables.begin(), variables.end(), var) == variables.end()) {
-                variables.push_back(var);
-            }
-        }
-        std::sort(variables.begin(), variables.end());
+    /**
+     * @brief Constructor initializing with premises and conclusion.
+     * 
+     * This constructor initializes the premises and conclusion, and then extracts the variables.
+     * 
+     * @param p The list of premises (logical expressions).
+     * @param c The conclusion (logical expression).
+     */
+    TruthTableGenerator(const std::vector<std::string>& p, const std::string& c)
+        : premises(p), conclusion(c) {
+        extractVariables(); // Extract unique variables from premises and conclusion
+    }
 
-        // Print header
-        printHeader(variables, premises, conclusion);
+    /**
+     * @brief Generates and analyzes the truth table.
+     * 
+     * This function generates the truth table by evaluating all possible combinations of variable values.
+     * It also analyzes the results to determine the validity and satisfiability of the logical expressions.
+     * 
+     * The process involves:
+     * - Printing the header of the truth table.
+     * - Iterating through all possible combinations of variable values.
+     * - Evaluating each premise and the conclusion for each combination.
+     * - Printing the results in the truth table.
+     * - Analyzing the results to determine validity and satisfiability.
+     */
+    void generateAndAnalyze() {
+        printHeader(); // Print the header of the truth table
 
-        // Track satisfiability and validity
-        bool isSatisfiable = false;
-        bool isValid = true;
-        bool isFalsifiable = false;
-        std::vector<int> satisfiableRows;
-        std::vector<int> falsifiableRows;
+        bool isValid = true; // Flag to check if the logical expressions are valid
+        bool isSatisfiable = false; // Flag to check if the logical expressions are satisfiable
+        // 1 << n is equivalent to 2^n, which is the total number of combinations for n variables
+        const size_t combinations = 1 << variables.size(); // Total number of combinations (2^n) 
 
-        // Generate all possible truth value combinations
-        int numCombinations = std::pow(2, variables.size());
-        for (int i = 0; i < numCombinations; ++i) {
-            // Reset variables for this iteration
-            evaluator.resetVariables();
-
-            // Set variable values based on binary representation
+        // For each possible combination of variable values
+        for (size_t i = 0; i < combinations; ++i) {
+            // Set variable values based on the current combination
             for (size_t j = 0; j < variables.size(); ++j) {
-                bool value = (i & (1 << j)) != 0;
-                evaluator.setVariable(variables[j], value);
+                // Set the value of the j-th variable based on the j-th bit of the combination number 'i'
+                // TODO: Explanation:
+                // - 'i' represents the current combination of variable values in binary form.
+                // - '(1 << j)' creates a mask with only the j-th bit set to 1.
+                // - '(i & (1 << j))' checks if the j-th bit of 'i' is set to 1.
+                // - If the j-th bit of 'i' is 1, the variable is set to true; otherwise, it is set to false.
+                // Example:
+                // - For i = 5 (binary 101), the 0th and 2nd bits are set to 1.
+                // - This means variables[0] and variables[2] will be set to true, and variables[1] will be set to false.
+                evaluator.setVariable(variables[j], (i & (1 << j)) != 0);
             }
 
             // Evaluate premises and conclusion
-            bool allPremisesTrue = true;
-            bool conclusionTrue = evaluator.evaluate(conclusion);
+            bool allPremisesTrue = true; // Flag to check if all premises are true
+            std::vector<bool> premiseResults; // Store results of premise evaluations
 
-            std::vector<bool> premiseResults;
             for (const auto& premise : premises) {
-                bool premiseResult = evaluator.evaluate(premise);
-                premiseResults.push_back(premiseResult);
-                
-                if (!premiseResult) {
-                    allPremisesTrue = false;
-                }
+                bool result = evaluator.evaluate(premise); // Evaluate the premise
+                premiseResults.push_back(result); // Store the result
+                allPremisesTrue &= result; // Update the flag
             }
 
-            // Print truth values
-            for (char var : variables) {
-                std::cout << BOLD << std::setw(6) << (evaluator.evaluate(std::string(1, var)) ? "T" : "F") << " " << RESET;
-            }
+            bool conclusionResult = evaluator.evaluate(conclusion); // Evaluate the conclusion
 
-            // Print premise values
-            for (bool premiseResult : premiseResults) {
-                std::cout << BOLD << std::setw(12) << (premiseResult ? "T" : "F") << " " << RESET;
-            }
+            // Print the row values in the truth table
+            printTruthTableRow(i, premiseResults, conclusionResult, allPremisesTrue);
 
-            // Print conclusion with color coding
-            if (conclusionTrue) {
-                std::cout << GREEN << BOLD << std::setw(12) << "T" << RESET;
-            } else {
-                std::cout << RED << BOLD << std::setw(12) << "F" << RESET;
-            }
-
-            // Update satisfiability and validity
+            // Update analysis based on the results
             if (allPremisesTrue) {
-                if (conclusionTrue) {
-                    isSatisfiable = true;
-                    satisfiableRows.push_back(i + 1);
+                if (conclusionResult) {
+                    isSatisfiable = true; // If all premises are true and conclusion is true, it's satisfiable
                 } else {
-                    isFalsifiable = true;
-                    isValid = false;
-                    falsifiableRows.push_back(i + 1);
+                    isValid = false; // If all premises are true and conclusion is false, it's invalid
                 }
-                std::cout << CYAN << BOLD << " <-- Critical Row" << RESET;
             }
-            std::cout << std::endl;
         }
 
-        // Print analysis results
-        std::cout << "\n" << YELLOW << BOLD << "Analysis Results:" << RESET << std::endl;
-        std::cout << "Satisfiability: " << (isSatisfiable ? (GREEN + BOLD + "Satisfiable") : (RED + BOLD + "Not Satisfiable")) << RESET << std::endl;
-        std::cout << "Validity: " << (isValid ? (GREEN + BOLD + "Valid") : (RED + BOLD + "Falsifiable")) << RESET << std::endl;
+        // Print the analysis results
+        printAnalysis(isValid, isSatisfiable);
+    }
 
-        // Print critical rows
-        if (!satisfiableRows.empty()) {
-            std::cout << "Rows causing satisfiability: ";
-            for (int row : satisfiableRows) {
-                std::cout << row << " ";
-            }
-            std::cout << std::endl;
+private:
+    /**
+     * @brief Prints a single row of the truth table.
+     * 
+     * This function prints the values of variables, premises, and conclusion for a specific combination.
+     * 
+     * @param combination The current combination of variable values.
+     * @param premiseResults The results of evaluating the premises.
+     * @param conclusionResult The result of evaluating the conclusion.
+     * @param isCriticalRow Flag indicating if this row is critical (all premises true).
+     */
+    void printTruthTableRow(size_t combination, 
+                           const std::vector<bool>& premiseResults,
+                           bool conclusionResult,
+                           bool isCriticalRow) const {
+        // Print variable values
+        for (size_t j = 0; j < variables.size(); ++j) {
+            std::cout << Colors::BOLD << std::setw(6) 
+                     << ((combination & (1 << j)) ? "T" : "F") << " " << Colors::RESET;
         }
 
-        if (!falsifiableRows.empty()) {
-            std::cout << "Rows causing falsifiability: ";
-            for (int row : falsifiableRows) {
-                std::cout << row << " ";
-            }
-            std::cout << std::endl;
+        // Print premise results
+        for (bool result : premiseResults) {
+            std::cout << Colors::BOLD << std::setw(12) 
+                     << (result ? "T" : "F") << " " << Colors::RESET;
         }
+
+        // Print conclusion with color
+        std::cout << (conclusionResult ? Colors::GREEN : Colors::RED)
+                 << Colors::BOLD << std::setw(12) 
+                 << (conclusionResult ? "T" : "F") << Colors::RESET;
+
+        // Mark critical rows
+        if (isCriticalRow) {
+            std::cout << Colors::BLUE << " <== Critical Row" << Colors::RESET;
+        }
+        
+        std::cout << "\n";
+    }
+
+    /**
+     * @brief Prints the analysis results.
+     * 
+     * This function prints whether the logical expressions are valid and satisfiable.
+     * 
+     * @param isValid Flag indicating if the logical expressions are valid.
+     * @param isSatisfiable Flag indicating if the logical expressions are satisfiable.
+     */
+    void printAnalysis(bool isValid, bool isSatisfiable) const {
+        std::cout << "\n" << Colors::YELLOW << Colors::BOLD 
+                 << "Analysis Results:" << Colors::RESET << "\n";
+        
+        std::cout << "Validity: " 
+                 << (isValid ? Colors::GREEN : Colors::RED)
+                 << Colors::BOLD 
+                 << (isValid ? "Valid" : "Invalid")
+                 << Colors::RESET << "\n";
+        
+        std::cout << "Satisfiability: "
+                 << (isSatisfiable ? Colors::GREEN : Colors::RED)
+                 << Colors::BOLD
+                 << (isSatisfiable ? "Satisfiable" : "Unsatisfiable")
+                 << Colors::RESET << "\n";
     }
 };
 
+/**
+ * @brief Main function implementing the user interface
+ */
 int main() {
-    LogicalAnalyzer analyzer;
-    int numPremises;
-    
-    std::cout << std::endl;
-    std::cout << BLUE << BOLD << "Logical Expression Truth Table Analyzer" << RESET << std::endl;
-    std::cout << MAGENTA << "Terms of Use: Use " << BOLD << "&" << RESET << MAGENTA << " for " << BOLD << "AND" << RESET << MAGENTA << ", " << BOLD << "|" << RESET << MAGENTA << " for " << BOLD << "OR" << RESET << MAGENTA << ", " << BOLD << "~" << RESET << MAGENTA << " for " << BOLD << "NOT" << RESET << MAGENTA << ", " << BOLD << "->" << RESET << MAGENTA << " for " << BOLD << "Conditional" << RESET << MAGENTA << ", " << BOLD << "<->" << RESET << MAGENTA << " for " << BOLD << "BICONDITIONAL" << RESET << MAGENTA << "." << RESET << std::endl;
-    
-    // Get number of premises
-    std::cout << CYAN << BOLD << "Number of premises: " << RESET;
-    std::cin >> numPremises;
-    std::cin.ignore(); // Clear input buffer
+    try {
+        std::cout << Colors::BLUE << Colors::BOLD 
+                 << "\nLogical Expression Truth Table Analyzer\n" << Colors::RESET;
 
-    // Store premises
-    std::vector<std::string> premises;
-    for (int i = 0; i < numPremises; ++i) {
-        std::string premise;
-        std::cout << CYAN << BOLD << "Premise " << (i+1) << ": " << RESET;
-        std::getline(std::cin, premise);
-        premises.push_back(premise);
+        // Display terms of use
+        std::cout << Colors::MAGENTA << "Terms of Use:\n"
+                  << "1. Ensure logical expressions are correctly formatted.\n"
+                  << "2. The program supports variables (letters), logical operators (~, &, |, ->, <->), and parentheses.\n"
+                  << Colors::RESET << "\n";
+
+        // Get premises
+        std::cout << "Number of premises: ";
+        int numPremises;
+        std::cin >> numPremises;
+        std::cin.ignore();
+
+        std::vector<std::string> premises;
+        for (int i = 0; i < numPremises; ++i) {
+            std::cout << "Premise " << (i+1) << ": ";
+            std::string premise;
+            std::getline(std::cin, premise);
+            premises.push_back(premise);
+        }
+
+        // Get conclusion
+        std::cout << "Conclusion: ";
+        std::string conclusion;
+        std::getline(std::cin, conclusion);
+
+        // Generate and analyze truth table
+        TruthTableGenerator generator(premises, conclusion);
+        generator.generateAndAnalyze();
+
+    } catch (const std::exception& e) {
+        std::cerr << Colors::RED << "Error: " << e.what() << Colors::RESET << "\n";
+        return 1;
     }
-
-    // Get conclusion
-    std::string conclusion;
-    std::cout << CYAN << BOLD << "Conclusion: " << RESET;
-    std::getline(std::cin, conclusion);
-    std::cout << std::endl;
-
-    // Generate truth table
-    analyzer.generateTruthTable(premises, conclusion);
 
     return 0;
 }
