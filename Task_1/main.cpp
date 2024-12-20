@@ -11,11 +11,10 @@
 #include <string>
 #include <map>
 #include <stack>
-#include <memory>
-#include <bitset>
-#include <unordered_set>
-#include <algorithm>
-#include <iomanip>
+#include <bitset> 
+#include <unordered_set> // For unique variables
+#include <algorithm> // For std::sort
+#include <iomanip> // For std::setw
 
 // Constants for terminal colors
 namespace Colors {
