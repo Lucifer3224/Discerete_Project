@@ -50,17 +50,17 @@ string decrypt(string cipher_text, int a, int b) {
 }
 
 int main() {
+    string cipher_text;
+    cout << "Enter the ciphered text: ";   // "NEZKLYECIDJYCIDNQ "
+    cin >> cipher_text;
     int a, b;
     cout << "Enter first key: ";
     cin >> a;
     cout << "Enter second key: ";
     cin >> b;
     
-    string cipher_text = "NEZKLYECIDJYCIDNQ ";
-    
-    cout << "\nDecryption:\n";
     string plain_text = decrypt(cipher_text, a, b);
-    cout << "Plain Text: |" << plain_text << "|" << endl;
+    cout << "Plain Text: " << plain_text << endl;
     
     return 0;
 }
