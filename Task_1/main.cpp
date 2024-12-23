@@ -481,13 +481,13 @@ private:
         std::cout << "Validity: " 
                  << (isValid ? Colors::GREEN : Colors::RED)
                  << Colors::BOLD 
-                 << (isValid ? "Valid" : "Invalid")
+                 << (isValid ? "Valid" : "Falsifiable")
                  << Colors::RESET << "\n";
         
         std::cout << "Satisfiability: "
                  << (isSatisfiable ? Colors::GREEN : Colors::RED)
                  << Colors::BOLD
-                 << (isSatisfiable ? "Satisfiable" : "Unsatisfiable")
+                 << (isSatisfiable ? "Satisfiable" : "Not satisfiable")
                  << Colors::RESET << "\n";
     }
 };
